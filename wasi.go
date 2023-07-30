@@ -43,6 +43,7 @@ func NewWASI(opts ...Option) *WASI {
 	return wasi
 }
 
+// Link defines all (supported) WASI functions on the given linker.
 func (wasi *WASI) Link(store wasmtime.Storelike, linker *wasmtime.Linker) error {
 	const mod = "wasi_snapshot_preview1"
 	symbols := map[string]any{

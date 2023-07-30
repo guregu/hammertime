@@ -183,7 +183,7 @@ func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *libc.Dirent, name 
 }
 
 type filedesc struct {
-	File
+	file
 	no      int_t
 	fdstat  *libc.Fdstat
 	preopen string
@@ -210,7 +210,7 @@ func (fsys *filesystem) unshare(fd *filedesc) {
 	}
 }
 
-type File interface {
+type file interface {
 	fs.File
 	io.WriteSeeker
 }
@@ -238,7 +238,7 @@ func newStream(v any) *filedesc {
 	}
 
 	return &filedesc{
-		File:   file,
+		file:   file,
 		fdstat: &stat,
 	}
 }

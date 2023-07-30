@@ -10,9 +10,12 @@ This library is a WASI implementation in Go for wasmtime-go. Its goal is to inte
 
 Rough proof of concept targeting `wasi_snapshot_preview1`. If this project proves to be useful, I'm thinking a code generation approach targeting preview2 would be the next step.
 
-TL;DR: Alpha! 🤠
+TL;DR: Alpha!
 
-⛔️ Note that hammertime does not implement the preview1 capabilities model (yet?).
+- ⛔️ Note that hammertime does not implement the preview1 capabilities model (yet?).
+- ☣️ It's also not safe to share WASI instances concurrently or across instances (yet?).
+- 😇 Lots of `unsafe`. Needs fuzzing or something.
+- 🤠 Experimental. Ideas welcome!
 
 ## Features
 
@@ -62,11 +65,92 @@ TL;DR: Alpha! 🤠
 
 See: [Godoc](https://godoc.org/github.com/trealla-prolog/go)
 
+### Quick Start
+
+Imagine we have this C program we want to execute as WebAssembly. It's a simple program that greets the first command line parameter on stdout, using the environment variable `GREET` to override the default greeting.
+
+```c
+#include <stdlib.h>
+#include <stdio.h>
+
+int main(int argc, char **argv) {
+    if (argc < 2)
+        return -1;
+    char *who = argv[1];
+    char *greet = getenv("GREET");
+    if (!greet)
+        greet = "greetings";
+    printf("%s %s\n", greet, who);
+    return 0;
+}
+```
+
+We can embed and execute it in a Go program like so, capturing the output:
+
+```go
+import (
+	"bytes"
+	_ "embed"
+	"log"
+	"os"
+
+	"github.com/bytecodealliance/wasmtime-go/v11"
+	"github.com/guregu/hammertime"
+)
+
+//go:embed hello.wasm
+var wasmModule []byte // Protip: stuff your modules into your binary with embed
+
+func main() {
+	// Standard boilerplate
+	engine := wasmtime.NewEngine()
+	store := wasmtime.NewStore(engine)
+	module, err := wasmtime.NewModule(engine, wasmModule)
+	if err != nil {
+		panic(err)
+	}
+	linker := wasmtime.NewLinker(engine)
+
+	// Set up our custom WASI
+	stdout := new(bytes.Buffer)
+	wasi := hammertime.NewWASI(
+		WithArgs([]string{"hello.wasm", "world"}),
+        WithEnv(map[string]string{"GREET": "hello"})
+		WithStdout(stdout),           // Capture stdout to a *bytes.Buffer!
+		WithFS(os.DirFS("testdata")), // Works with Go's fs.FS! (kind of)
+	)
+	// Link our WASI
+	if err := wasi.Link(store, linker); err != nil {
+		panic(err)
+	}
+
+	// Use wasmtime as normal
+	instance, err := linker.Instantiate(store, module)
+	if err != nil {
+		panic(err)
+	}
+	start := instance.GetFunc(store, "_start")
+	_, err = start.Call(store)
+	if err != nil {
+		panic(err)
+	}
+
+	// Grab captured stdout data
+	output := stdout.String()
+	log.Println(output)
+    // Prints: hello world
+}
+```
+
+This gives us an easy way to communicate with wasm modules.
+
 # Testing
 
-To build/run the test files, install WASI SDK, then do something like:
+Each testdata/*.c file is a little self-contained C program that tests a WASI feature.
+
+To build/run the test files, [install WASI SDK](https://github.com/WebAssembly/wasi-sdk#install), then do something like:
 
 ```console
-$ make WASI_CC=/path/to/wasi-sdk-20.0/bin/clang all
-$ go test -v
+$ export WASI_CC=/path/to/wasi-sdk-XX.0/bin/clang
+$ make clean && make -j8
 ```
