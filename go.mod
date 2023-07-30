@@ -1,4 +1,4 @@
-module github.com/guregu/mywasi
+module github.com/guregu/hammertime
 
 go 1.20
 

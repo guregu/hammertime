@@ -1,4 +1,10 @@
-package mywasi
+package libc
+
+import (
+	"errors"
+	"io/fs"
+	"log"
+)
 
 type Errno = int32
 
@@ -81,3 +87,16 @@ const (
 	ErrnoXdev                        // Cross-device link.
 	ErrnoNotcapable                  // Extension: Capabilities insufficient.
 )
+
+func Error(err error) Errno {
+	switch {
+	case err == nil:
+		return ErrnoSuccess
+	case errors.Is(err, fs.ErrExist):
+		return ErrnoNoent
+	case errors.Is(err, fs.ErrInvalid):
+		return ErrnoInval
+	}
+	log.Println("unhandled errno error:", err)
+	return ErrnoNosys
+}
