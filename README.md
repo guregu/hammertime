@@ -63,7 +63,7 @@ TL;DR: Alpha!
 
 # Usage
 
-See: [Godoc](https://godoc.org/github.com/trealla-prolog/go)
+See: [Godoc](https://godoc.org/github.com/guregu/hammertime)
 
 ### Quick Start
 
