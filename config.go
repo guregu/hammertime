@@ -42,6 +42,13 @@ func WithClock(clock Clock) Option {
 	}
 }
 
+// WithStdin sets standard input to r.
+func WithStdin(r io.Reader) Option {
+	return func(wasi *WASI) {
+		wasi.stdin = r
+	}
+}
+
 // WithStdout sets standard output to w.
 func WithStdout(w io.Writer) Option {
 	return func(wasi *WASI) {

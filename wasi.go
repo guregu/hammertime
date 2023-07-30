@@ -19,6 +19,7 @@ type WASI struct {
 	clock Clock
 
 	// config
+	stdin  io.Reader
 	stdout io.Writer
 	stderr io.Writer
 	env    map[string]string
@@ -39,7 +40,7 @@ func NewWASI(opts ...Option) *WASI {
 	if wasi.clock == nil {
 		wasi.clock = SystemClock
 	}
-	wasi.filesystem = *newFilesystem(wasi.fs, nil, wasi.stdout, wasi.stderr)
+	wasi.filesystem = *newFilesystem(wasi.fs, wasi.stdin, wasi.stdout, wasi.stderr)
 	return wasi
 }
 

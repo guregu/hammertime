@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ func TestWASI(t *testing.T) {
 		{"clock.wasm", "1690674910 239502000\n"},
 		{"read.wasm", "hello world!"},
 		{"dir.wasm", "a.txt\nb.txt\n"},
+		{"echo.wasm", "is this thing on?\n"},
 	}
 
 	for _, testcase := range cases {
@@ -37,12 +39,14 @@ func TestWASI(t *testing.T) {
 			}
 			linker := wasmtime.NewLinker(engine)
 
+			stdin := strings.NewReader("is this thing on?\n")
 			stdout := new(bytes.Buffer)
 			stderr := new(bytes.Buffer)
 			wasi := NewWASI(
 				WithArgs([]string{"hello", "world"}),
 				WithEnv(map[string]string{"TEST": "it works"}),
 				WithClock(clock),
+				WithStdin(stdin),
 				WithStdout(stdout),
 				WithStderr(stderr),
 				WithFS(os.DirFS("testdata")),

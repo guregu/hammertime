@@ -9,7 +9,8 @@ PROGS = testdata/args.wasm 	\
 	testdata/clock.wasm 	\
 	testdata/read.wasm 		\
 	testdata/dir.wasm 		\
-	testdata/hello.wasm
+	testdata/hello.wasm		\
+	testdata/echo.wasm
 endif
 
 .PHONY: test
