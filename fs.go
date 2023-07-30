@@ -20,8 +20,9 @@ type filesystem struct {
 
 func newFilesystem(fsys fs.FS, stdin io.Reader, stdout, stderr io.Writer) *filesystem {
 	system := &filesystem{
-		fds: map[int32]*filedesc{},
-		fs:  fsys,
+		fds:    map[int32]*filedesc{},
+		fs:     fsys,
+		nextfd: stdioMaxFD + 1,
 	}
 	fd0 := newStream(stdin)
 	fd1 := newStream(stdout)
@@ -147,6 +148,8 @@ func (fsys *filesystem) readdir(fd libc.Int, cookie int64) (ent *libc.Dirent, na
 	if fsys.fs == nil {
 		return nil, "", libc.ErrnoNosys
 	}
+
+	// TODO: use fancy fs ReadDir(n) instead of fake cookie
 
 	i := int(cookie)
 	f, errno := fsys.get(fd)
