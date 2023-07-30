@@ -12,6 +12,8 @@ Rough proof of concept targeting `wasi_snapshot_preview1`. If this project prove
 
 TL;DR: Alpha! 🤠
 
+⛔️ Note that hammertime does not implement the preview1 capabilities model (yet?).
+
 ## Features
 
 - Use `fs.FS` for the Wasm filesystem

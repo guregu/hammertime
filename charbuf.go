@@ -10,9 +10,9 @@ import (
 type charbuffer []string
 
 func (strs charbuffer) size() size_t {
-	var size uint32
+	var size size_t
 	for _, arg := range strs {
-		size += uint32(len(arg) + 1)
+		size += size_t(len(arg) + 1)
 	}
 	return size
 }
