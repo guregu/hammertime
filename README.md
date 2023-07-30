@@ -154,5 +154,5 @@ To build/run the test files, [install WASI SDK](https://github.com/WebAssembly/w
 
 ```console
 $ export WASI_CC=/path/to/wasi-sdk-XX.0/bin/clang
-$ make clean && make -j8
+$ make -j8
 ```

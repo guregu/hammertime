@@ -351,7 +351,8 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 		_, err = f.Seek(int64(offset), io.SeekStart)
 	}
 	if err != nil {
-		panic(err) // TODO
+		errno = libc.Error(err)
+		return
 	}
 
 	vecsize := size_t(unsafe.Sizeof(libc.Iovec{}))
@@ -364,7 +365,6 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 			read, err := f.Read(buf)
 			total += size_t(read)
 			wasi.debugf("pread(%d, %q, %d)", fd, string(buf[:read]), total)
-			// fmt.Println("read", total, "=", string(buf))
 			if err == io.EOF {
 				break
 			} else if err != nil {
@@ -576,7 +576,7 @@ func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 
-	return libc.ErrnoNosys, nil
+	return errno, nil
 }
 
 func (wasi *WASI) poll_oneoff(caller *wasmtime.Caller, _in, _out, _nsubs, _retptr int_t) (int32, *wasmtime.Trap) {

@@ -21,6 +21,7 @@ func init() {
 	}
 	assert("iovec", unsafe.Sizeof(Iovec{}), 8)
 	assert("ciovec", unsafe.Sizeof(Ciovec{}), 8)
+	assert("prestat_dir", unsafe.Sizeof(PrestatDir{}), 8)
 	assert("fdstat", unsafe.Sizeof(Fdstat{}), 24)
 	assert("filestat", unsafe.Sizeof(Filestat{}), 64)
 	assert("dirent", unsafe.Sizeof(Dirent{}), 24)
