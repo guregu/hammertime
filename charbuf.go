@@ -1,4 +1,4 @@
-package mywasi
+package hammertime
 
 import (
 	"bytes"

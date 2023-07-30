@@ -1,9 +1,8 @@
-package mywasi
+package hammertime
 
 import (
 	"io"
 	"io/fs"
-	"log"
 	"path"
 	"time"
 
@@ -33,7 +32,7 @@ func newFilesystem(fsys fs.FS, stdin io.Reader, stdout, stderr io.Writer) *files
 	if fsys != nil {
 		fd3 := &filedesc{
 			no:      3,
-			fdstat:  &fdstat{fs_filetype: filetypeDirectory},
+			fdstat:  &libc.Fdstat{Filetype: libc.FiletypeDirectory},
 			preopen: "/",
 		}
 		system.set(3, fd3)
@@ -58,7 +57,7 @@ func (fsys *filesystem) get(fd int_t) (*filedesc, libc.Errno) {
 	return f, libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) fdstat(fd int_t) (*fdstat, libc.Errno) {
+func (fsys *filesystem) fdstat(fd int_t) (*libc.Fdstat, libc.Errno) {
 	f, errno := fsys.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return nil, errno
@@ -66,7 +65,7 @@ func (fsys *filesystem) fdstat(fd int_t) (*fdstat, libc.Errno) {
 	return f.fdstat, libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) stat(fd int_t) (*filestat, libc.Errno) {
+func (fsys *filesystem) stat(fd int_t) (*libc.Filestat, libc.Errno) {
 	f, errno := fsys.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return nil, errno
@@ -76,17 +75,17 @@ func (fsys *filesystem) stat(fd int_t) (*filestat, libc.Errno) {
 		return nil, libc.Error(err)
 	}
 
-	fstat := &filestat{
-		dev:   fsys.dev,
-		ino:   1337, // TODO!!
-		mtim:  uint64(stat.ModTime().UnixNano()),
-		nlink: 1,
-		size:  uint64(stat.Size()),
+	fstat := &libc.Filestat{
+		Dev:   fsys.dev,
+		Ino:   1337, // TODO!!
+		Mtim:  uint64(stat.ModTime().UnixNano()),
+		Nlink: 1,
+		Size:  uint64(stat.Size()),
 	}
 	if stat.IsDir() {
-		fstat.filetype = filetypeDirectory
+		fstat.Filetype = libc.FiletypeDirectory
 	} else {
-		fstat.filetype = filetypeRegularFile // TODO
+		fstat.Filetype = libc.FiletypeRegularFile // TODO
 	}
 	return fstat, libc.ErrnoSuccess
 }
@@ -144,7 +143,7 @@ func (fsys *filesystem) rename(old, new string) libc.Errno {
 	return libc.ErrnoNosys
 }
 
-func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *dirent, name string, errno libc.Errno) {
+func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *libc.Dirent, name string, errno libc.Errno) {
 	if fsys.fs == nil {
 		return nil, "", libc.ErrnoNosys
 	}
@@ -170,15 +169,15 @@ func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *dirent, name strin
 		return nil, "", libc.ErrnoSuccess
 	}
 	name = f.dirent[i].Name()
-	dtype := filetypeRegularFile
+	dtype := libc.FiletypeRegularFile
 	if f.dirent[i].IsDir() {
-		dtype = filetypeDirectory
+		dtype = libc.FiletypeDirectory
 	}
-	dir := &dirent{
-		next:   uint64(i + 1),
-		ino:    uint64(1337 + i), // TODO
-		namlen: size_t(len(name)),
-		dtype:  dtype,
+	dir := &libc.Dirent{
+		Next:   uint64(i + 1),
+		Ino:    uint64(1337 + i), // TODO
+		Namlen: size_t(len(name)),
+		Dtype:  dtype,
 	}
 	return dir, name, libc.ErrnoSuccess
 }
@@ -186,7 +185,7 @@ func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *dirent, name strin
 type filedesc struct {
 	File
 	no      int_t
-	fdstat  *fdstat
+	fdstat  *libc.Fdstat
 	preopen string
 	dirent  []fs.DirEntry
 
@@ -206,7 +205,7 @@ func (fsys *filesystem) unshare(fd *filedesc) {
 	}
 	fd.rc--
 	if fd.rc <= 0 {
-		log.Println("gc", fd.no)
+		// log.Println("gc", fd.no)
 		delete(fsys.fds, fd.no)
 	}
 }
@@ -234,8 +233,8 @@ func newStream(v any) *filedesc {
 		file.statter = x
 	}
 
-	stat := fdstat{
-		fs_filetype: filetypeCharacterDevice,
+	stat := libc.Fdstat{
+		Filetype: libc.FiletypeCharacterDevice,
 	}
 
 	return &filedesc{
@@ -243,6 +242,8 @@ func newStream(v any) *filedesc {
 		fdstat: &stat,
 	}
 }
+
+// TODO: replace with https://github.com/hack-pad/hackpadfs
 
 type stream struct {
 	io.Writer
@@ -265,7 +266,7 @@ func (s *stream) Stat() (fs.FileInfo, error) {
 
 func (s *stream) Write(p []byte) (int, error) {
 	if s.Writer == nil {
-		return 0, io.EOF
+		return 0, fs.ErrInvalid
 	}
 	return s.Writer.Write(p)
 }

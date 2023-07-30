@@ -1,4 +1,4 @@
-package mywasi
+package hammertime
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/bytecodealliance/wasmtime-go/v11"
 )
 
-func TestWasi(t *testing.T) {
+func TestWASI(t *testing.T) {
 	clock := FixedClock(time.Unix(1690674910, 239502000))
 	cases := []struct {
 		filename string
@@ -46,13 +46,18 @@ func TestWasi(t *testing.T) {
 				WithStdout(stdout),
 				WithStderr(stderr),
 				WithFS(os.DirFS("testdata")),
+				WithDebug(true),
 			)
-			wasi.Link(store, linker)
+			if err := wasi.Link(store, linker); err != nil {
+				t.Fatal(err)
+			}
 
 			instance, err := linker.Instantiate(store, module)
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			t.Log("running:", testcase.filename)
 			start := instance.GetFunc(store, "_start")
 			start.Call(store)
 
