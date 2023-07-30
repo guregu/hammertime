@@ -12,6 +12,8 @@ import (
 )
 
 func TestWASI(t *testing.T) {
+	stdinText := "is this thing on?\nhow about this?\n"
+
 	clock := FixedClock(time.Unix(1690674910, 239502000))
 	cases := []struct {
 		filename string
@@ -22,7 +24,7 @@ func TestWASI(t *testing.T) {
 		{"clock.wasm", "1690674910 239502000\n"},
 		{"read.wasm", "hello world!"},
 		{"dir.wasm", "a.txt\nb.txt\n"},
-		{"echo.wasm", "is this thing on?\n"},
+		{"echo.wasm", stdinText},
 	}
 
 	for _, testcase := range cases {
@@ -39,7 +41,7 @@ func TestWASI(t *testing.T) {
 			}
 			linker := wasmtime.NewLinker(engine)
 
-			stdin := strings.NewReader("is this thing on?\n")
+			stdin := strings.NewReader(stdinText)
 			stdout := new(bytes.Buffer)
 			stderr := new(bytes.Buffer)
 			wasi := NewWASI(

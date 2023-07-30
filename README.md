@@ -67,20 +67,17 @@ See: [Godoc](https://godoc.org/github.com/trealla-prolog/go)
 
 ### Quick Start
 
-Imagine we have this C program we want to execute as WebAssembly. It's a simple program that greets the first command line parameter on stdout, using the environment variable `GREET` to override the default greeting.
+Imagine we have this C program we want to execute as WebAssembly. It's a simple program that receives a newline-separated list of who to greet via standard input, and writes "hello {name}" to standard output.
 
 ```c
-#include <stdlib.h>
-#include <stdio.h>
-
-int main(int argc, char **argv) {
-    if (argc < 2)
-        return -1;
-    char *who = argv[1];
-    char *greet = getenv("GREET");
-    if (!greet)
-        greet = "greetings";
-    printf("%s %s\n", greet, who);
+int main() {
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read = 0;
+    while ((read = getline(&line, &len, stdin)) != -1) {
+        printf("hello %s", line);
+    }
+    free(line);
     return 0;
 }
 ```
@@ -89,56 +86,61 @@ We can embed and execute it in a Go program like so, capturing the output:
 
 ```go
 import (
-	"bytes"
-	_ "embed"
-	"log"
-	"os"
+    "bytes"
+    _ "embed"
+    "log"
+    "os"
 
-	"github.com/bytecodealliance/wasmtime-go/v11"
-	"github.com/guregu/hammertime"
+    "github.com/bytecodealliance/wasmtime-go/v11"
+    "github.com/guregu/hammertime"
 )
 
 //go:embed hello.wasm
 var wasmModule []byte // Protip: stuff your modules into your binary with embed
 
 func main() {
-	// Standard boilerplate
-	engine := wasmtime.NewEngine()
-	store := wasmtime.NewStore(engine)
-	module, err := wasmtime.NewModule(engine, wasmModule)
-	if err != nil {
-		panic(err)
-	}
-	linker := wasmtime.NewLinker(engine)
+    // Standard boilerplate
+    engine := wasmtime.NewEngine()
+    store := wasmtime.NewStore(engine)
+    module, err := wasmtime.NewModule(engine, wasmModule)
+    if err != nil {
+        panic(err)
+    }
+    linker := wasmtime.NewLinker(engine)
 
-	// Set up our custom WASI
-	stdout := new(bytes.Buffer)
-	wasi := hammertime.NewWASI(
-		WithArgs([]string{"hello.wasm", "world"}),
-        WithEnv(map[string]string{"GREET": "hello"})
-		WithStdout(stdout),           // Capture stdout to a *bytes.Buffer!
-		WithFS(os.DirFS("testdata")), // Works with Go's fs.FS! (kind of)
-	)
-	// Link our WASI
-	if err := wasi.Link(store, linker); err != nil {
-		panic(err)
-	}
+    // Prepare our input and output
+    input := "alice\nbob\n"
+    stdin := strings.NewReader(input)
+    stdout := new(bytes.Buffer)
 
-	// Use wasmtime as normal
-	instance, err := linker.Instantiate(store, module)
-	if err != nil {
-		panic(err)
-	}
-	start := instance.GetFunc(store, "_start")
-	_, err = start.Call(store)
-	if err != nil {
-		panic(err)
-	}
+    // Set up our custom WASI
+    wasi := hammertime.NewWASI(
+        WithArgs([]string{"hello.wasm"}),
+        WithStdin(stdin),             // Stdin can be any io.Reader
+        WithStdout(stdout),           // Capture stdout to a *bytes.Buffer!
+        WithFS(os.DirFS("testdata")), // Works with Go's fs.FS! (kind of)
+    )
+    // Link our WASI
+    if err := wasi.Link(store, linker); err != nil {
+        panic(err)
+    }
 
-	// Grab captured stdout data
-	output := stdout.String()
-	log.Println(output)
-    // Prints: hello world
+    // Use wasmtime as normal
+    instance, err := linker.Instantiate(store, module)
+    if err != nil {
+        panic(err)
+    }
+    start := instance.GetFunc(store, "_start")
+    _, err = start.Call(store)
+    if err != nil {
+        panic(err)
+    }
+
+    // Grab captured stdout data
+    output := stdout.String()
+    fmt.Println(output)
+    // Prints: hello alice
+    // hello bob
 }
 ```
 

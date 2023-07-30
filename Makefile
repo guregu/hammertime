@@ -1,8 +1,3 @@
-CC = $(CC)
-ifdef WASI_CC
-CC = $(WASI_CC)
-endif
-
 ifndef PROGS
 PROGS = testdata/args.wasm 	\
 	testdata/env.wasm 		\
@@ -12,6 +7,13 @@ PROGS = testdata/args.wasm 	\
 	testdata/hello.wasm		\
 	testdata/echo.wasm
 endif
+
+CC = $(CC)
+ifdef WASI_CC
+CC = $(WASI_CC)
+endif
+
+TESTFLAGS := -v -timeout 10s -race
 
 .PHONY: test
 
@@ -24,7 +26,7 @@ clean:
 build: $(PROGS)
 
 test: build
-	go test -v -timeout 10s -race
+	go test $(TESTFLAGS)
 
 testdata/%.wasm: testdata/%.c
 	$(CC) testdata/$*.c -o testdata/$*.wasm -g
