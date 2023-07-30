@@ -1,4 +1,4 @@
-# hammertime [![GoDoc](https://godoc.org/github.com/guregu/hammertime?status.svg)](https://godoc.org/github.com/guregu/hammertime)
+# 🔨 hammertime [![GoDoc](https://godoc.org/github.com/guregu/hammertime?status.svg)](https://godoc.org/github.com/guregu/hammertime)
 
 `import "github.com/guregu/hammertime"`
 
