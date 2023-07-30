@@ -12,8 +12,8 @@ import (
 const stdioMaxFD = 3
 
 type filesystem struct {
-	fds    map[int_t]*filedesc
-	nextfd int_t
+	fds    map[libc.Int]*filedesc
+	nextfd libc.Int
 	fs     fs.FS
 	dev    uint64
 }
@@ -41,7 +41,7 @@ func newFilesystem(fsys fs.FS, stdin io.Reader, stdout, stderr io.Writer) *files
 	return system
 }
 
-func (fsys *filesystem) set(no int_t, fd *filedesc) {
+func (fsys *filesystem) set(no libc.Int, fd *filedesc) {
 	fd.no = no
 	fsys.fds[no] = fd
 	if fsys.nextfd <= no {
@@ -49,7 +49,7 @@ func (fsys *filesystem) set(no int_t, fd *filedesc) {
 	}
 }
 
-func (fsys *filesystem) get(fd int_t) (*filedesc, libc.Errno) {
+func (fsys *filesystem) get(fd libc.Int) (*filedesc, libc.Errno) {
 	f, ok := fsys.fds[fd]
 	if !ok {
 		return nil, libc.ErrnoBadf
@@ -57,7 +57,7 @@ func (fsys *filesystem) get(fd int_t) (*filedesc, libc.Errno) {
 	return f, libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) fdstat(fd int_t) (*libc.Fdstat, libc.Errno) {
+func (fsys *filesystem) fdstat(fd libc.Int) (*libc.Fdstat, libc.Errno) {
 	f, errno := fsys.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return nil, errno
@@ -65,7 +65,7 @@ func (fsys *filesystem) fdstat(fd int_t) (*libc.Fdstat, libc.Errno) {
 	return f.fdstat, libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) stat(fd int_t) (*libc.Filestat, libc.Errno) {
+func (fsys *filesystem) stat(fd libc.Int) (*libc.Filestat, libc.Errno) {
 	f, errno := fsys.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return nil, errno
@@ -90,7 +90,7 @@ func (fsys *filesystem) stat(fd int_t) (*libc.Filestat, libc.Errno) {
 	return fstat, libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) open(path string) (fd int_t, errno libc.Errno) {
+func (fsys *filesystem) open(path string) (fd libc.Int, errno libc.Errno) {
 	if fsys.fs == nil {
 		return 0, libc.ErrnoNosys
 	}
@@ -108,7 +108,7 @@ func (fsys *filesystem) open(path string) (fd int_t, errno libc.Errno) {
 	return
 }
 
-func (fsys *filesystem) close(fd int_t) libc.Errno {
+func (fsys *filesystem) close(fd libc.Int) libc.Errno {
 	desc, errno := fsys.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return errno
@@ -143,7 +143,7 @@ func (fsys *filesystem) rename(old, new string) libc.Errno {
 	return libc.ErrnoNosys
 }
 
-func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *libc.Dirent, name string, errno libc.Errno) {
+func (fsys *filesystem) readdir(fd libc.Int, cookie int64) (ent *libc.Dirent, name string, errno libc.Errno) {
 	if fsys.fs == nil {
 		return nil, "", libc.ErrnoNosys
 	}
@@ -176,7 +176,7 @@ func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *libc.Dirent, name 
 	dir := &libc.Dirent{
 		Next:   uint64(i + 1),
 		Ino:    uint64(1337 + i), // TODO
-		Namlen: size_t(len(name)),
+		Namlen: libc.Size(len(name)),
 		Dtype:  dtype,
 	}
 	return dir, name, libc.ErrnoSuccess
@@ -184,7 +184,7 @@ func (fsys *filesystem) readdir(fd int_t, cookie int64) (ent *libc.Dirent, name 
 
 type filedesc struct {
 	file
-	no      int_t
+	no      libc.Int
 	fdstat  *libc.Fdstat
 	preopen string
 	dirent  []fs.DirEntry

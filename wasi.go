@@ -82,7 +82,7 @@ func (wasi *WASI) Link(store wasmtime.Storelike, linker *wasmtime.Linker) error 
 	return nil
 }
 
-func (wasi *WASI) args_sizes_get(caller *wasmtime.Caller, argc, argv int32) (int32, *wasmtime.Trap) {
+func (wasi *WASI) args_sizes_get(caller *wasmtime.Caller, argc, argv libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugln("args_sizes_get", argc, argv)
 
 	err := wasi.args.writeSizes(caller, argc, argv)
@@ -93,7 +93,7 @@ func (wasi *WASI) args_sizes_get(caller *wasmtime.Caller, argc, argv int32) (int
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) environ_sizes_get(caller *wasmtime.Caller, argc, argv int32) (int32, *wasmtime.Trap) {
+func (wasi *WASI) environ_sizes_get(caller *wasmtime.Caller, argc, argv libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugln("environ_sizes_get", argc, argv)
 
 	err := wasi.environ.writeSizes(caller, argc, argv)
@@ -104,7 +104,7 @@ func (wasi *WASI) environ_sizes_get(caller *wasmtime.Caller, argc, argv int32) (
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) args_get(caller *wasmtime.Caller, argv, argbuf int32) (int32, *wasmtime.Trap) {
+func (wasi *WASI) args_get(caller *wasmtime.Caller, argv, argbuf libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugln("args_get", argv, argbuf)
 
 	if err := wasi.args.write(caller, argv, argbuf); err != nil {
@@ -113,7 +113,7 @@ func (wasi *WASI) args_get(caller *wasmtime.Caller, argv, argbuf int32) (int32, 
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) environ_get(caller *wasmtime.Caller, argv, argbuf int32) (int32, *wasmtime.Trap) {
+func (wasi *WASI) environ_get(caller *wasmtime.Caller, argv, argbuf libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugln("environ_get", argv, argbuf)
 
 	err := wasi.environ.write(caller, argv, argbuf)
@@ -124,14 +124,14 @@ func (wasi *WASI) environ_get(caller *wasmtime.Caller, argv, argbuf int32) (int3
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_close(caller *wasmtime.Caller, fd int32) (int32, *wasmtime.Trap) {
+func (wasi *WASI) fd_close(caller *wasmtime.Caller, fd libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugln("fd_close", fd)
 	errno := wasi.close(fd)
 	return errno, nil
 }
 
-func (wasi *WASI) fd_fdstat_get(caller *wasmtime.Caller, fd, _retptr int32) (int32, *wasmtime.Trap) {
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) fd_fdstat_get(caller *wasmtime.Caller, fd, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("fd_fdstat_get", fd, retptr)
 
 	stat, errno := wasi.fdstat(fd)
@@ -144,13 +144,13 @@ func (wasi *WASI) fd_fdstat_get(caller *wasmtime.Caller, fd, _retptr int32) (int
 
 	ensure(caller, func(base unsafe.Pointer, _ []byte) {
 		*(*libc.Fdstat)(unsafe.Add(base, retptr)) = *stat
-	}, retptr+size_t(unsafe.Sizeof(*stat)))
+	}, retptr+libc.Size(unsafe.Sizeof(*stat)))
 
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_seek(caller *wasmtime.Caller, fd int_t, offset int64, whence, _retptr int_t) (int32, *wasmtime.Trap) {
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) fd_seek(caller *wasmtime.Caller, fd libc.Int, offset int64, whence, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("fd_seek", fd, offset, whence, retptr)
 	f, errno := wasi.get(fd)
 	if errno != libc.ErrnoSuccess {
@@ -174,25 +174,25 @@ func (wasi *WASI) fd_seek(caller *wasmtime.Caller, fd int_t, offset int64, whenc
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_write(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr int32) (int32, *wasmtime.Trap) {
-	iovs := ptr_t(_iovs)
-	iovslen := size_t(_iovslen)
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) fd_write(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	iovs := libc.Ptr(_iovs)
+	iovslen := libc.Size(_iovslen)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("fd_write", fd, iovs, iovslen, retptr)
 
 	f, errno := wasi.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return errno, nil
 	}
-	vecsize := size_t(unsafe.Sizeof(libc.Iovec{}))
-	var total size_t
+	vecsize := libc.Size(unsafe.Sizeof(libc.Iovec{}))
+	var total libc.Size
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		vec0 := (*libc.Iovec)(unsafe.Add(base, iovs))
 		vecs := unsafe.Slice(vec0, iovslen)
 		for _, vec := range vecs {
 			buf := data[vec.Buf : vec.Buf+vec.Len]
 			wrote, err := f.Write(buf)
-			total += size_t(wrote)
+			total += libc.Size(wrote)
 			wasi.debugf("write(%d, %q)", fd, string(buf))
 			if err == io.EOF {
 				break
@@ -201,23 +201,23 @@ func (wasi *WASI) fd_write(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr
 				break
 			}
 		}
-		*(*size_t)(unsafe.Add(base, retptr)) = total
-	}, iovs+vecsize*iovslen, retptr+ptrSize)
+		*(*libc.Size)(unsafe.Add(base, retptr)) = total
+	}, iovs+vecsize*iovslen, retptr+libc.PtrSize)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 	return errno, nil
 }
 
-func (wasi *WASI) proc_exit(caller *wasmtime.Caller, code int32) *wasmtime.Trap {
+func (wasi *WASI) proc_exit(caller *wasmtime.Caller, code libc.Int) *wasmtime.Trap {
 	if code > 0 {
 		return wasmtime.NewTrap(fmt.Sprintf("exit: %d", code))
 	}
 	return nil
 }
 
-func (wasi *WASI) clock_time_get(caller *wasmtime.Caller, clockid int32, resolution int64, _tsptr int32) (int32, *wasmtime.Trap) {
-	tsptr := ptr_t(_tsptr)
+func (wasi *WASI) clock_time_get(caller *wasmtime.Caller, clockid libc.Int, resolution int64, _tsptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	tsptr := libc.Ptr(_tsptr)
 	wasi.debugln("clock_time_get", clockid, resolution, tsptr)
 
 	// TODO: clockids
@@ -232,13 +232,13 @@ func (wasi *WASI) clock_time_get(caller *wasmtime.Caller, clockid int32, resolut
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_fdstat_set_flags(caller *wasmtime.Caller, fd int32, flags int32) (int32, *wasmtime.Trap) {
+func (wasi *WASI) fd_fdstat_set_flags(caller *wasmtime.Caller, fd libc.Int, flags libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugf("fd_fdstat_set_flags(%d, %o)", fd, flags)
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_prestat_get(caller *wasmtime.Caller, fd int32, _prestat int32) (int32, *wasmtime.Trap) {
-	prestat := ptr_t(_prestat)
+func (wasi *WASI) fd_prestat_get(caller *wasmtime.Caller, fd libc.Int, _prestat libc.Int) (libc.Int, *wasmtime.Trap) {
+	prestat := libc.Ptr(_prestat)
 	wasi.debugln("fd_prestat_get", fd, prestat)
 
 	f, errno := wasi.get(fd)
@@ -251,12 +251,12 @@ func (wasi *WASI) fd_prestat_get(caller *wasmtime.Caller, fd int32, _prestat int
 
 	dir := libc.PrestatDir{
 		Tag:    0, // directory
-		DirLen: uint32(len(f.preopen)),
+		DirLen: libc.Uint(len(f.preopen)),
 	}
 
 	err := ensure(caller, func(base unsafe.Pointer, _ []byte) {
 		*(*libc.PrestatDir)(unsafe.Add(base, prestat)) = dir
-	}, prestat+size_t(unsafe.Sizeof(dir)))
+	}, prestat+libc.Size(unsafe.Sizeof(dir)))
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
@@ -264,9 +264,9 @@ func (wasi *WASI) fd_prestat_get(caller *wasmtime.Caller, fd int32, _prestat int
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_prestat_dir_name(caller *wasmtime.Caller, fd int32, _buf int32, _len int32) (int32, *wasmtime.Trap) {
-	buf := ptr_t(_buf)
-	len := size_t(_len)
+func (wasi *WASI) fd_prestat_dir_name(caller *wasmtime.Caller, fd int32, _buf int32, _len int32) (libc.Int, *wasmtime.Trap) {
+	buf := libc.Ptr(_buf)
+	len := libc.Size(_len)
 	wasi.debugln("fd_prestat_dir_name", fd, buf, len)
 
 	f, errno := wasi.get(fd)
@@ -287,10 +287,10 @@ func (wasi *WASI) fd_prestat_dir_name(caller *wasmtime.Caller, fd int32, _buf in
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr int32) (int32, *wasmtime.Trap) {
-	iovs := ptr_t(_iovs)
-	iovslen := size_t(_iovslen)
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr int32) (libc.Int, *wasmtime.Trap) {
+	iovs := libc.Ptr(_iovs)
+	iovslen := libc.Size(_iovslen)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("fd_read", fd, iovs, iovslen, retptr)
 
 	f, errno := wasi.get(fd)
@@ -298,15 +298,15 @@ func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr 
 		return errno, nil
 	}
 
-	vecsize := size_t(unsafe.Sizeof(libc.Ciovec{}))
-	var total size_t
+	vecsize := libc.Size(unsafe.Sizeof(libc.Ciovec{}))
+	var total libc.Size
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		vec0 := (*libc.Ciovec)(unsafe.Add(base, iovs))
 		vecs := unsafe.Slice(vec0, iovslen)
 		for _, vec := range vecs {
 			buf := data[vec.Buf+total : vec.Buf+vec.Len]
 			read, err := f.Read(buf)
-			total += size_t(read)
+			total += libc.Size(read)
 			wasi.debugf("read(%d, %q, %d)", fd, string(buf[:read]), total)
 			if err == io.EOF {
 				break
@@ -315,8 +315,8 @@ func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr 
 				break
 			}
 		}
-		*(*size_t)(unsafe.Add(base, retptr)) = total
-	}, iovs+vecsize*iovslen, retptr+ptrSize)
+		*(*libc.Size)(unsafe.Add(base, retptr)) = total
+	}, iovs+vecsize*iovslen, retptr+libc.PtrSize)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
@@ -324,10 +324,10 @@ func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr 
 }
 
 func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset, _retptr int32) (errno int32, trap *wasmtime.Trap) {
-	iovs := ptr_t(_iovs)
-	iovslen := size_t(_iovslen)
-	offset := size_t(_offset)
-	retptr := ptr_t(_retptr)
+	iovs := libc.Ptr(_iovs)
+	iovslen := libc.Size(_iovslen)
+	offset := libc.Size(_offset)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("fd_read", fd, iovs, iovslen, retptr)
 
 	var f *filedesc
@@ -355,15 +355,15 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 		return
 	}
 
-	vecsize := size_t(unsafe.Sizeof(libc.Iovec{}))
-	var total size_t
+	vecsize := libc.Size(unsafe.Sizeof(libc.Iovec{}))
+	var total libc.Size
 	err = ensure(caller, func(base unsafe.Pointer, data []byte) {
 		vec0 := (*libc.Iovec)(unsafe.Add(base, iovs))
 		vecs := unsafe.Slice(vec0, iovslen)
 		for _, vec := range vecs {
 			buf := data[vec.Buf : vec.Buf+vec.Len]
 			read, err := f.Read(buf)
-			total += size_t(read)
+			total += libc.Size(read)
 			wasi.debugf("pread(%d, %q, %d)", fd, string(buf[:read]), total)
 			if err == io.EOF {
 				break
@@ -372,8 +372,8 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 				break
 			}
 		}
-		*(*size_t)(unsafe.Add(base, retptr)) = total
-	}, iovs+vecsize*iovslen, retptr+ptrSize)
+		*(*libc.Size)(unsafe.Add(base, retptr)) = total
+	}, iovs+vecsize*iovslen, retptr+libc.PtrSize)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
@@ -381,16 +381,16 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 	return errno, nil
 }
 
-func (wasi *WASI) fd_readdir(caller *wasmtime.Caller, fd, _buf, _buflen int_t, cookie int64, _retptr int_t) (int_t, *wasmtime.Trap) {
-	buf := ptr_t(_buf)
-	buflen := size_t(_buflen)
-	retptr := ptr_t(_retptr) // buffer consumed
+func (wasi *WASI) fd_readdir(caller *wasmtime.Caller, fd, _buf, _buflen libc.Int, cookie int64, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	buf := libc.Ptr(_buf)
+	buflen := libc.Size(_buflen)
+	retptr := libc.Ptr(_retptr) // buffer consumed
 	wasi.debugln("fd_readdir", fd, buf, buflen, cookie, retptr)
 
 	var errno libc.Errno
-	size := size_t(unsafe.Sizeof(libc.Dirent{}))
+	size := libc.Size(unsafe.Sizeof(libc.Dirent{}))
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
-		var wrote size_t
+		var wrote libc.Size
 		var dirp *libc.Dirent
 		var name string
 		for ; ; cookie++ {
@@ -403,14 +403,14 @@ func (wasi *WASI) fd_readdir(caller *wasmtime.Caller, fd, _buf, _buflen int_t, c
 			}
 			*(*libc.Dirent)(unsafe.Add(base, buf+wrote)) = *dirp
 			wrote += size
-			n := size_t(copy(data[buf+wrote:buf+buflen], []byte(name)))
+			n := libc.Size(copy(data[buf+wrote:buf+buflen], []byte(name)))
 			wrote += n
-			if n != size_t(len(name)) {
+			if n != libc.Size(len(name)) {
 				break
 			}
 		}
-		*(*size_t)(unsafe.Add(base, retptr)) = wrote
-	}, buf+buflen, retptr+ptrSize)
+		*(*libc.Size)(unsafe.Add(base, retptr)) = wrote
+	}, buf+buflen, retptr+libc.PtrSize)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
@@ -418,28 +418,28 @@ func (wasi *WASI) fd_readdir(caller *wasmtime.Caller, fd, _buf, _buflen int_t, c
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) path_open(caller *wasmtime.Caller, fd, dirflags, _pathptr, _pathlen, oflags int32, fs_rights_base, fs_rights_inheriting int64, fdflags, _retptr int32) (int32, *wasmtime.Trap) {
-	pathptr := ptr_t(_pathptr)
-	pathlen := size_t(_pathlen)
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) path_open(caller *wasmtime.Caller, fd, dirflags, _pathptr, _pathlen, oflags int32, fs_rights_base, fs_rights_inheriting int64, fdflags, _retptr int32) (libc.Int, *wasmtime.Trap) {
+	pathptr := libc.Ptr(_pathptr)
+	pathlen := libc.Size(_pathlen)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("path_open", fd, dirflags, pathptr, pathlen, oflags, fs_rights_base, fs_rights_inheriting, fdflags, retptr)
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		path := string(data[pathptr : pathptr+pathlen])
 		wasi.debugf("path_open(%q, %o)", path, oflags)
-		var file int_t
+		var file libc.Int
 		file, errno = wasi.open(path)
-		*(*int_t)(unsafe.Add(base, retptr)) = file
-	}, pathptr+pathlen, retptr+ptrSize)
+		*(*libc.Int)(unsafe.Add(base, retptr)) = file
+	}, pathptr+pathlen, retptr+libc.PtrSize)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 	return errno, nil
 }
 
-func (wasi *WASI) path_create_directory(caller *wasmtime.Caller, _path, _pathlen int32) (int32, *wasmtime.Trap) {
-	path := ptr_t(_path)
-	pathlen := size_t(_pathlen)
+func (wasi *WASI) path_create_directory(caller *wasmtime.Caller, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+	path := libc.Ptr(_path)
+	pathlen := libc.Size(_pathlen)
 
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
@@ -452,9 +452,9 @@ func (wasi *WASI) path_create_directory(caller *wasmtime.Caller, _path, _pathlen
 	return libc.ErrnoNosys, nil
 }
 
-func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, _path, _pathlen int32) (int32, *wasmtime.Trap) {
-	path := ptr_t(_path)
-	pathlen := size_t(_pathlen)
+func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+	path := libc.Ptr(_path)
+	pathlen := libc.Size(_pathlen)
 
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
@@ -467,9 +467,9 @@ func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, _path, _pathlen
 	return libc.ErrnoNosys, nil
 }
 
-func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, _path, _pathlen int32) (int32, *wasmtime.Trap) {
-	path := ptr_t(_path)
-	pathlen := size_t(_pathlen)
+func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+	path := libc.Ptr(_path)
+	pathlen := libc.Size(_pathlen)
 
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
@@ -482,9 +482,9 @@ func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, _path, _pathlen int3
 	return libc.ErrnoNosys, nil
 }
 
-func (wasi *WASI) fd_filestat_get(caller *wasmtime.Caller, fd int_t, _retptr int_t) (int32, *wasmtime.Trap) {
-	retptr := ptr_t(_retptr)
-	size := size_t(unsafe.Sizeof(libc.Filestat{}))
+func (wasi *WASI) fd_filestat_get(caller *wasmtime.Caller, fd libc.Int, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	retptr := libc.Ptr(_retptr)
+	size := libc.Size(unsafe.Sizeof(libc.Filestat{}))
 
 	stat, errno := wasi.stat(fd)
 	if errno != 0 {
@@ -500,14 +500,14 @@ func (wasi *WASI) fd_filestat_get(caller *wasmtime.Caller, fd int_t, _retptr int
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) path_filestat_get(caller *wasmtime.Caller, fd, _lookupflags, _path, _pathlen, _retptr int_t) (int32, *wasmtime.Trap) {
-	flags := uint_t(_lookupflags)
-	path := ptr_t(_path)
-	pathlen := size_t(_pathlen)
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) path_filestat_get(caller *wasmtime.Caller, fd, _lookupflags, _path, _pathlen, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	flags := libc.Uint(_lookupflags)
+	path := libc.Ptr(_path)
+	pathlen := libc.Size(_pathlen)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("path_filestat_get", fd, flags, path, pathlen, retptr)
 
-	size := size_t(unsafe.Sizeof(libc.Filestat{}))
+	size := libc.Size(unsafe.Sizeof(libc.Filestat{}))
 
 	stat, errno := wasi.stat(fd)
 	if errno != 0 {
@@ -518,19 +518,19 @@ func (wasi *WASI) path_filestat_get(caller *wasmtime.Caller, fd, _lookupflags, _
 		name := data[path : path+pathlen]
 		wasi.debugln("name:", name)
 		*(*libc.Filestat)(unsafe.Add(base, retptr)) = *stat
-	}, retptr+size)
+	}, path+pathlen, retptr+size)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) path_readlink(caller *wasmtime.Caller, fd, _path, _pathlen, _bufptr, _buflen, _retptr int_t) (int32, *wasmtime.Trap) {
-	path := ptr_t(_path)
-	pathlen := size_t(_pathlen)
-	bufptr := ptr_t(_bufptr)
-	buflen := size_t(_buflen)
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) path_readlink(caller *wasmtime.Caller, fd, _path, _pathlen, _bufptr, _buflen, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	path := libc.Ptr(_path)
+	pathlen := libc.Size(_pathlen)
+	bufptr := libc.Ptr(_bufptr)
+	buflen := libc.Size(_buflen)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("path_readlink", path, pathlen, bufptr, buflen, retptr)
 
 	var errno libc.Errno
@@ -541,8 +541,8 @@ func (wasi *WASI) path_readlink(caller *wasmtime.Caller, fd, _path, _pathlen, _b
 		if errno != 0 {
 			return
 		}
-		size := size_t(copy(data[bufptr:bufptr+buflen], []byte(link)))
-		*(*size_t)(unsafe.Add(base, retptr)) = size
+		size := libc.Size(copy(data[bufptr:bufptr+buflen], []byte(link)))
+		*(*libc.Size)(unsafe.Add(base, retptr)) = size
 	}, path+pathlen, bufptr+buflen)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
@@ -552,12 +552,12 @@ func (wasi *WASI) path_readlink(caller *wasmtime.Caller, fd, _path, _pathlen, _b
 }
 
 // __imported_wasi_snapshot_preview1_path_rename((int32_t) fd, (int32_t) old_path, (int32_t) old_path_len, (int32_t) new_fd, (int32_t) new_path, (int32_t) new_path_len)
-func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen, _newfdptr, _newpath, _newpathlen int_t) (int32, *wasmtime.Trap) {
-	oldpath := ptr_t(_oldpath)
-	oldpathlen := size_t(_oldpathlen)
-	newfd := ptr_t(_newfdptr)
-	newpath := ptr_t(_newpath)
-	newpathlen := size_t(_newpathlen)
+func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen, _newfdptr, _newpath, _newpathlen libc.Int) (libc.Int, *wasmtime.Trap) {
+	oldpath := libc.Ptr(_oldpath)
+	oldpathlen := libc.Size(_oldpathlen)
+	newfd := libc.Ptr(_newfdptr)
+	newpath := libc.Ptr(_newpath)
+	newpathlen := libc.Size(_newpathlen)
 	// retptr := ptr_t(_retptr)
 	wasi.debugln("path_rename", oldpath, oldpathlen, newfd, newpath, newpathlen)
 
@@ -570,7 +570,7 @@ func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen
 		if errno != 0 {
 			return
 		}
-		*(*int_t)(unsafe.Add(base, newfd)) = fd // TODO
+		*(*libc.Int)(unsafe.Add(base, newfd)) = fd // TODO
 	}, oldpath+oldpathlen, newpath+newpathlen, newfd)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
@@ -579,11 +579,11 @@ func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen
 	return errno, nil
 }
 
-func (wasi *WASI) poll_oneoff(caller *wasmtime.Caller, _in, _out, _nsubs, _retptr int_t) (int32, *wasmtime.Trap) {
-	in := ptr_t(_in)
-	out := ptr_t(_out)
-	nsubs := size_t(_nsubs)
-	retptr := ptr_t(_retptr)
+func (wasi *WASI) poll_oneoff(caller *wasmtime.Caller, _in, _out, _nsubs, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
+	in := libc.Ptr(_in)
+	out := libc.Ptr(_out)
+	nsubs := libc.Size(_nsubs)
+	retptr := libc.Ptr(_retptr)
 	wasi.debugln("poll_oneoff", in, out, nsubs, retptr)
 	return libc.ErrnoNosys, nil
 }

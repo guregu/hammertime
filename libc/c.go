@@ -5,9 +5,16 @@ import (
 	"unsafe"
 )
 
+// Maybe if we're careful enough here we could convert to wasm64 eventually?
+
 type (
-	Size = uint32 // size_t
-	Ptr  = uint32 // int
+	Int  = int32  // int
+	Uint = uint32 // unsigned int
+
+	Size    = uint32 // size_t
+	Ssize   = int32  // ssize_t
+	Ptr     = uint32 // uintptr_t
+	Ptrdiff = int32  // ptrdiff_t
 )
 
 const PtrSize = 4
