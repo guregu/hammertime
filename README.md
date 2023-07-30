@@ -1,4 +1,6 @@
-# hammertime
+# hammertime [![GoDoc](https://godoc.org/github.com/guregu/hammertime?status.svg)](https://godoc.org/github.com/guregu/hammertime)
+
+`import "github.com/guregu/hammertime"`
 
 Do you want to use the excellent [wasmtime-go](https://github.com/bytecodealliance/wasmtime-go) Wasm runtime library, but are missing some features like [capturing stdout or setting stdin](https://github.com/bytecodealliance/wasmtime-go/issues/34)?
 
@@ -53,6 +55,10 @@ TL;DR: Alpha! 🤠
 | 🙂 | Not bad                        |
 | 🧐 | Needs more work/testing/love   |
 | 😶‍🌫️ | Stub/missing                   |
+
+# Usage
+
+See: [Godoc](https://godoc.org/github.com/trealla-prolog/go)
 
 # Testing
 
