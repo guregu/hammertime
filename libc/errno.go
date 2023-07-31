@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"log"
+	"syscall"
 )
 
 type Errno = int32
@@ -92,10 +93,24 @@ func Error(err error) Errno {
 	switch {
 	case err == nil:
 		return ErrnoSuccess
-	case errors.Is(err, fs.ErrExist):
+	case errors.Is(err, fs.ErrExist), errors.Is(err, syscall.EEXIST):
+		return ErrnoExist
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOENT):
 		return ErrnoNoent
-	case errors.Is(err, fs.ErrInvalid):
+	case errors.Is(err, fs.ErrInvalid), errors.Is(err, syscall.EINVAL):
 		return ErrnoInval
+	case errors.Is(err, fs.ErrPermission), errors.Is(err, syscall.EPERM):
+		return ErrnoPerm
+	case errors.Is(err, fs.ErrClosed), errors.Is(err, syscall.EBADF):
+		return ErrnoBadf
+	case errors.Is(err, syscall.EISDIR):
+		return ErrnoIsdir
+	case errors.Is(err, syscall.ENOTDIR):
+		return ErrnoNotdir
+	case errors.Is(err, syscall.ENOTEMPTY):
+		return ErrnoNotempty
+	case errors.Is(err, syscall.ENOSYS):
+		return ErrnoNosys
 	}
 	log.Println("unhandled errno error:", err)
 	return ErrnoNosys

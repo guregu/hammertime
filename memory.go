@@ -20,17 +20,19 @@ func (sf segfault) Error() string {
 }
 
 func ensure(caller *wasmtime.Caller, fn func(base unsafe.Pointer, data []byte), addrs ...libc.Ptr) error {
-	const overflow = 1 << 32
+	// const max32 = 1 << 32
 
 	mem := caller.GetExport("memory").Memory()
 	defer runtime.KeepAlive(mem)
+
 	base := mem.Data(caller)
 	datasize := mem.DataSize(caller)
 	maxphysaddr := libc.Size(datasize)
-	if datasize >= overflow {
-		return fmt.Errorf("memory is too big for wasm32: %d", datasize)
-	}
-	data := (*[overflow]byte)(base)[:datasize:datasize]
+	// if datasize >= max32 {
+	// 	return fmt.Errorf("memory is too big for wasm32: %d", datasize)
+	// }
+	data := unsafe.Slice((*byte)(base), datasize)
+	// data := (*[max32]byte)(base)[:datasize:datasize]
 
 	maxaddr := slices.Max(addrs)
 	if maxaddr > maxphysaddr {

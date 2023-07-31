@@ -6,15 +6,20 @@ import (
 	"path"
 	"time"
 
-	libc "github.com/guregu/hammertime/libc"
+	"github.com/hack-pad/hackpadfs"
+
+	"github.com/guregu/hammertime/libc"
 )
 
-const stdioMaxFD = 3
+const (
+	stdioMaxFD = 3
+	mkdirMode  = 0755
+)
 
 type filesystem struct {
 	fds    map[libc.Int]*filedesc
 	nextfd libc.Int
-	fs     fs.FS
+	fs     hackpadfs.FS
 	dev    uint64
 }
 
@@ -123,26 +128,59 @@ func (fsys *filesystem) readlink(name string) (string, libc.Errno) {
 		return "", libc.ErrnoNosys
 	}
 	name = path.Clean(name)
-	f, err := fsys.fs.Open(name)
+	info, err := hackpadfs.Stat(fsys.fs, name)
 	if err != nil {
 		return "", libc.Error(err)
 	}
-	defer f.Close()
-	stat, err := f.Stat()
-	if err != nil {
-		return "", libc.Error(err)
-	}
-	// TODO: mess with name
-	return stat.Name(), libc.ErrnoSuccess
+	return info.Name(), libc.ErrnoSuccess
 }
 
 func (fsys *filesystem) rename(old, new string) libc.Errno {
 	if fsys.fs == nil {
 		return libc.ErrnoNosys
 	}
-	// TODO
-	return libc.ErrnoNosys
+	err := hackpadfs.Rename(fsys.fs, old, new)
+	return libc.Error(err)
 }
+
+func (fsys *filesystem) remove(name string) libc.Errno {
+	if fsys.fs == nil {
+		return libc.ErrnoNosys
+	}
+	err := hackpadfs.Remove(fsys.fs, name)
+	return libc.Error(err)
+}
+
+func (fsys *filesystem) rmdir(name string) libc.Errno {
+	if fsys.fs == nil {
+		return libc.ErrnoNosys
+	}
+	stat, err := hackpadfs.Stat(fsys.fs, name)
+	if err != nil {
+		return libc.Error(err)
+	}
+	if !stat.IsDir() {
+		return libc.ErrnoNotdir
+	}
+	err = hackpadfs.Remove(fsys.fs, name)
+	return libc.Error(err)
+}
+
+func (fsys *filesystem) mkdir(name string, mode fs.FileMode) libc.Errno {
+	if fsys.fs == nil {
+		return libc.ErrnoNosys
+	}
+	err := hackpadfs.Mkdir(fsys.fs, name, mode)
+	return libc.Error(err)
+}
+
+// func (fsys *filesystem) rmdir(name string) libc.Errno {
+// 	if fsys.fs == nil {
+// 		return libc.ErrnoNosys
+// 	}
+// 	err := hackpadfs.RemoveAll(fsys.fs, name)
+// 	return libc.Error(err)
+// }
 
 func (fsys *filesystem) readdir(fd libc.Int, cookie int64) (ent *libc.Dirent, name string, errno libc.Errno) {
 	if fsys.fs == nil {
@@ -186,7 +224,7 @@ func (fsys *filesystem) readdir(fd libc.Int, cookie int64) (ent *libc.Dirent, na
 }
 
 type filedesc struct {
-	file
+	fs.File
 	no      libc.Int
 	fdstat  *libc.Fdstat
 	preopen string
@@ -218,6 +256,17 @@ type file interface {
 	io.WriteSeeker
 }
 
+func newFile(f fs.File) *filedesc {
+	stat := libc.Fdstat{
+		Filetype: libc.FiletypeRegularFile, // TODO
+	}
+
+	return &filedesc{
+		File:   f,
+		fdstat: &stat,
+	}
+}
+
 func newStream(v any) *filedesc {
 	file := &stream{}
 	if x, ok := v.(io.Writer); ok {
@@ -241,7 +290,7 @@ func newStream(v any) *filedesc {
 	}
 
 	return &filedesc{
-		file:   file,
+		File:   file,
 		fdstat: &stat,
 	}
 }

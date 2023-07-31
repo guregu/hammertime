@@ -5,7 +5,8 @@ PROGS = testdata/args.wasm 	\
 	testdata/read.wasm 		\
 	testdata/dir.wasm 		\
 	testdata/hello.wasm		\
-	testdata/echo.wasm
+	testdata/echo.wasm		\
+	testdata/mkdir.wasm
 endif
 
 CC = $(CC)

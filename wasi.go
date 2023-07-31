@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"syscall"
 	"unsafe"
 
 	"github.com/bytecodealliance/wasmtime-go/v11"
+	"github.com/hack-pad/hackpadfs"
 
 	"github.com/guregu/hammertime/libc"
 )
@@ -151,12 +153,12 @@ func (wasi *WASI) fd_fdstat_get(caller *wasmtime.Caller, fd, _retptr libc.Int) (
 
 func (wasi *WASI) fd_seek(caller *wasmtime.Caller, fd libc.Int, offset int64, whence, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
 	retptr := libc.Ptr(_retptr)
-	wasi.debugln("fd_seek", fd, offset, whence, retptr)
+	wasi.debugf("seek(%d, %d, %d)", fd, offset, whence)
 	f, errno := wasi.get(fd)
 	if errno != libc.ErrnoSuccess {
 		return errno, nil
 	}
-	ret, err := f.Seek(offset, int(whence))
+	ret, err := hackpadfs.SeekFile(f, offset, int(whence))
 	switch {
 	// TODO: more
 	case err != nil:
@@ -191,7 +193,15 @@ func (wasi *WASI) fd_write(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr
 		vecs := unsafe.Slice(vec0, iovslen)
 		for _, vec := range vecs {
 			buf := data[vec.Buf : vec.Buf+vec.Len]
-			wrote, err := f.Write(buf)
+			// TODO: fix this
+			var wrote int
+			var err error
+			if w, ok := f.File.(io.Writer); ok {
+				wrote, err = w.Write(buf)
+			} else {
+				err = syscall.ENOSYS // RO?
+			}
+			// wrote, err := hackpadfs.WriteFile(f, buf)
 			total += libc.Size(wrote)
 			wasi.debugf("write(%d, %q)", fd, string(buf))
 			if err == io.EOF {
@@ -336,19 +346,21 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 		return
 	}
 
-	pos, err := f.Seek(0, io.SeekCurrent)
+	// TODO: use ReadAt
+
+	pos, err := hackpadfs.SeekFile(f, 0, io.SeekCurrent)
 	if err != nil {
 		errno = libc.Error(err)
 		return
 	}
 	defer func() {
-		_, err := f.Seek(pos, io.SeekStart)
+		_, err := hackpadfs.SeekFile(f, pos, io.SeekStart)
 		if errno == 0 {
 			errno = libc.Error(err)
 		}
 	}()
 	if pos != 0 && offset != 0 {
-		_, err = f.Seek(int64(offset), io.SeekStart)
+		_, err = hackpadfs.SeekFile(f, int64(offset), io.SeekStart)
 	}
 	if err != nil {
 		errno = libc.Error(err)
@@ -426,7 +438,7 @@ func (wasi *WASI) path_open(caller *wasmtime.Caller, fd, dirflags, _pathptr, _pa
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		path := string(data[pathptr : pathptr+pathlen])
-		wasi.debugf("path_open(%q, %o)", path, oflags)
+		wasi.debugf("open(%q, %o)", path, oflags)
 		var file libc.Int
 		file, errno = wasi.open(path)
 		*(*libc.Int)(unsafe.Add(base, retptr)) = file
@@ -437,49 +449,55 @@ func (wasi *WASI) path_open(caller *wasmtime.Caller, fd, dirflags, _pathptr, _pa
 	return errno, nil
 }
 
-func (wasi *WASI) path_create_directory(caller *wasmtime.Caller, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) path_create_directory(caller *wasmtime.Caller, fd, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
 	path := libc.Ptr(_path)
 	pathlen := libc.Size(_pathlen)
 
+	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
-		wasi.debugln("TODO: create dir", name)
+		errno = wasi.mkdir(name, mkdirMode) // TODO: mkdirat
+		wasi.debugf("mkdir(%d, %q)", fd, name)
 	}, path+pathlen)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 
-	return libc.ErrnoNosys, nil
+	return errno, nil
 }
 
-func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, fd, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
 	path := libc.Ptr(_path)
 	pathlen := libc.Size(_pathlen)
 
+	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
-		wasi.debugln("TODO: remove dir", name)
+		errno = wasi.remove(name)
+		wasi.debugf("rmdir(%d, %q)", fd, name) // TODO: fd
 	}, path+pathlen)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 
-	return libc.ErrnoNosys, nil
+	return errno, nil
 }
 
-func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, fd int, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
 	path := libc.Ptr(_path)
 	pathlen := libc.Size(_pathlen)
 
+	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
-		wasi.debugln("TODO: unlink file", name)
+		errno = wasi.remove(name)
+		wasi.debugf("unlink(%q)", name)
 	}, path+pathlen)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
 	}
 
-	return libc.ErrnoNosys, nil
+	return errno, nil
 }
 
 func (wasi *WASI) fd_filestat_get(caller *wasmtime.Caller, fd libc.Int, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
@@ -516,7 +534,7 @@ func (wasi *WASI) path_filestat_get(caller *wasmtime.Caller, fd, _lookupflags, _
 
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := data[path : path+pathlen]
-		wasi.debugln("name:", name)
+		wasi.debugf("stat(%d, %q, %o)", fd, name, flags)
 		*(*libc.Filestat)(unsafe.Add(base, retptr)) = *stat
 	}, path+pathlen, retptr+size)
 	if err != nil {
@@ -551,7 +569,6 @@ func (wasi *WASI) path_readlink(caller *wasmtime.Caller, fd, _path, _pathlen, _b
 	return errno, nil
 }
 
-// __imported_wasi_snapshot_preview1_path_rename((int32_t) fd, (int32_t) old_path, (int32_t) old_path_len, (int32_t) new_fd, (int32_t) new_path, (int32_t) new_path_len)
 func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen, _newfdptr, _newpath, _newpathlen libc.Int) (libc.Int, *wasmtime.Trap) {
 	oldpath := libc.Ptr(_oldpath)
 	oldpathlen := libc.Size(_oldpathlen)
@@ -566,7 +583,7 @@ func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen
 		// TODO: impl
 		oldname := string(data[oldpath : oldpath+oldpathlen])
 		newname := string(data[newpath : newpath+newpathlen])
-		errno = wasi.rename(oldname, newname)
+		errno = wasi.rename(oldname, newname) // TODO: use fd
 		if errno != 0 {
 			return
 		}

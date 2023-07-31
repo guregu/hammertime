@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/bytecodealliance/wasmtime-go/v11"
+	hpos "github.com/hack-pad/hackpadfs/os"
+	// _ "github.com/benesch/cgosymbolizer"
 )
 
 func TestWASI(t *testing.T) {
@@ -25,6 +27,7 @@ func TestWASI(t *testing.T) {
 		{"read.wasm", "hello world!"},
 		{"dir.wasm", "a.txt\nb.txt\n"},
 		{"echo.wasm", stdinText},
+		{"mkdir.wasm", "0 0\n0 0\n"},
 	}
 
 	for _, testcase := range cases {
@@ -44,6 +47,14 @@ func TestWASI(t *testing.T) {
 			stdin := strings.NewReader(stdinText)
 			stdout := new(bytes.Buffer)
 			stderr := new(bytes.Buffer)
+			dir, err := filepath.Abs("testdata")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dirfs, err := hpos.NewFS().Sub(dir[1:])
+			if err != nil {
+				t.Fatal(err)
+			}
 			wasi := NewWASI(
 				WithArgs([]string{"hello", "world"}),
 				WithEnv(map[string]string{"TEST": "it works"}),
@@ -51,7 +62,7 @@ func TestWASI(t *testing.T) {
 				WithStdin(stdin),
 				WithStdout(stdout),
 				WithStderr(stderr),
-				WithFS(os.DirFS("testdata")),
+				WithFS(dirfs),
 				WithDebug(true),
 			)
 			if err := wasi.Link(store, linker); err != nil {
