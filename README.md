@@ -19,9 +19,9 @@ TL;DR: Alpha!
 
 ## Features
 
-- Use `fs.FS` for the Wasm filesystem
-- `stdin` can be set to an `io.Reader`
-- `stdout` and `stderr` can be set to a `io.Writer`
+- Uses `fs.FS` for the Wasm filesystem. Supports [`hackpadfs`](https://github.com/hack-pad/hackpadfs#file-systems) extensions to add writing, etc.
+- `stdin` can be set to an `io.Reader`.
+- `stdout` and `stderr` can be set to a `io.Writer`.
 - More experimental stuff coming soon?
 
 | WASI API                  | Vibe   |
