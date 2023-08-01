@@ -233,7 +233,7 @@ func (wasi *WASI) clock_time_get(caller *wasmtime.Caller, clockid libc.Int, reso
 
 func (wasi *WASI) fd_fdstat_set_flags(caller *wasmtime.Caller, fd libc.Int, flags libc.Int) (libc.Int, *wasmtime.Trap) {
 	wasi.debugf("fd_fdstat_set_flags(%d, %o)", fd, flags)
-	return libc.ErrnoSuccess, nil
+	return libc.ErrnoNosys, nil
 }
 
 func (wasi *WASI) fd_prestat_get(caller *wasmtime.Caller, fd libc.Int, _prestat libc.Int) (libc.Int, *wasmtime.Trap) {
@@ -419,18 +419,23 @@ func (wasi *WASI) fd_readdir(caller *wasmtime.Caller, fd, _buf, _buflen libc.Int
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) path_open(caller *wasmtime.Caller, fd, dirflags, _pathptr, _pathlen, oflags int32, fs_rights_base, fs_rights_inheriting int64, fdflags, _retptr int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) path_open(caller *wasmtime.Caller, fd, _dirflags, _pathptr, _pathlen, _oflags int32, _fsrights_base, _fsrights_inheriting int64, _fdflags, _retptr int32) (libc.Int, *wasmtime.Trap) {
+	dirflags := libc.Lookupflag(_dirflags)
 	pathptr := libc.Ptr(_pathptr)
 	pathlen := libc.Size(_pathlen)
+	oflags := libc.Oflag(_oflags)
+	fdflags := libc.Fdflag(_fdflags)
+	rights := libc.Rights(_fsrights_base)
 	retptr := libc.Ptr(_retptr)
-	wasi.debugln("path_open", fd, dirflags, pathptr, pathlen, oflags, fs_rights_base, fs_rights_inheriting, fdflags, retptr)
+	wasi.debugln("path_open", fd, dirflags, pathptr, pathlen, oflags, rights, fdflags, retptr)
+
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		path := string(data[pathptr : pathptr+pathlen])
-		wasi.debugf("open(%q, %o)", path, oflags)
 		var file libc.Int
-		file, errno = wasi.open(path)
+		file, errno = wasi.open(fd, path, dirflags, oflags, fdflags, rights)
 		*(*libc.Int)(unsafe.Add(base, retptr)) = file
+		wasi.debugf("open(%d, %q, %o, %o, %o) → %d", fd, path, oflags, fdflags, rights, errno)
 	}, pathptr+pathlen, retptr+libc.PtrSize)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())

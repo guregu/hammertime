@@ -110,22 +110,30 @@ func (fsys *filesystem) stat(fd libc.Int) (*libc.Filestat, libc.Errno) {
 	return fstat, libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) open(path string) (fd libc.Int, errno libc.Errno) {
+func (fsys *filesystem) open(basefd libc.Int, path string, dirflags libc.Lookupflag, oflags libc.Oflag, fdflags libc.Fdflag, rights libc.Rights) (libc.Int, libc.Errno) {
 	if fsys.fs == nil {
 		return 0, libc.ErrnoNosys
 	}
+	path, errno := fsys.rel(basefd, path)
+	if errno != libc.ErrnoSuccess {
+		return 0, errno
+	}
+	flags := libc.OpenFileFlags(dirflags, oflags, fdflags, rights)
 
-	f, err := fsys.fs.Open(path)
+	// TODO: figure out mode
+	f, err := hackpadfs.OpenFile(fsys.fs, path, flags, 0755)
 	if err != nil {
 		return 0, libc.Error(err)
 	}
 
-	fd = fsys.nextfd
+	fd := fsys.nextfd
 	fsys.nextfd++ // TODO: handle overflow
 
 	var desc *filedesc
 	desc, errno = newFile(f)
 	desc.no = fd
+	desc.fdstat.Flags = fdflags
+	desc.fdstat.RightsBase = rights
 
 	fsys.fds[fd] = desc
 	fsys.share(desc)
