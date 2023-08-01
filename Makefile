@@ -1,12 +1,6 @@
 ifndef PROGS
-PROGS = testdata/args.wasm 	\
-	testdata/env.wasm 		\
-	testdata/clock.wasm 	\
-	testdata/read.wasm 		\
-	testdata/dir.wasm 		\
-	testdata/hello.wasm		\
-	testdata/echo.wasm		\
-	testdata/mkdir.wasm
+SRC   = $(wildcard testdata/*.c)
+PROGS = $(patsubst %.c,%.wasm,$(SRC))
 endif
 
 CC = $(CC)
@@ -21,10 +15,12 @@ TESTFLAGS := -v -timeout 10s -race
 all: build test
 
 clean:
-	rm -f testdata/*.wasm
+	rm -f testdata/*.wasm testdata/*.wat
 	go clean
 
 build: $(PROGS)
+
+wat: $(patsubst %.wasm,%.wat,$(PROGS))
 
 test: build
 	go test $(TESTFLAGS)

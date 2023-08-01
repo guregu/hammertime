@@ -263,7 +263,7 @@ func (wasi *WASI) fd_prestat_get(caller *wasmtime.Caller, fd libc.Int, _prestat 
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_prestat_dir_name(caller *wasmtime.Caller, fd int32, _buf int32, _len int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) fd_prestat_dir_name(caller *wasmtime.Caller, fd, _buf, _len libc.Int) (libc.Int, *wasmtime.Trap) {
 	buf := libc.Ptr(_buf)
 	len := libc.Size(_len)
 	wasi.debugln("fd_prestat_dir_name", fd, buf, len)
@@ -286,7 +286,7 @@ func (wasi *WASI) fd_prestat_dir_name(caller *wasmtime.Caller, fd int32, _buf in
 	return libc.ErrnoSuccess, nil
 }
 
-func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr libc.Int) (libc.Int, *wasmtime.Trap) {
 	iovs := libc.Ptr(_iovs)
 	iovslen := libc.Size(_iovslen)
 	retptr := libc.Ptr(_retptr)
@@ -322,7 +322,7 @@ func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr 
 	return errno, nil
 }
 
-func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset, _retptr int32) (errno int32, trap *wasmtime.Trap) {
+func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset, _retptr libc.Int) (errno int32, trap *wasmtime.Trap) {
 	iovs := libc.Ptr(_iovs)
 	iovslen := libc.Size(_iovslen)
 	offset := libc.Size(_offset)
@@ -569,7 +569,6 @@ func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen
 
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
-		// TODO: impl
 		oldname := string(data[oldpath : oldpath+oldpathlen])
 		newname := string(data[newpath : newpath+newpathlen])
 		errno = wasi.rename(fd, oldname, newname)
