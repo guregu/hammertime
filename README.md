@@ -44,11 +44,11 @@ TL;DR: Alpha!
 | fd_readdir                | 🙂     |
 | path_open                 | 🧐     |
 | path_filestat_get         | 🧐     |
-| path_readlink             | 😶‍🌫️     |
-| path_rename               | 😶‍🌫️     |
-| path_create_directory     | 😶‍🌫️     |
-| path_remove_directory     | 😶‍🌫️     |
-| path_unlink_file          | 😶‍🌫️     |
+| path_readlink             | 🧐     |
+| path_rename               | 🧐     |
+| path_create_directory     | 🙂     |
+| path_remove_directory     | 🙂     |
+| path_unlink_file          | 🙂     |
 | poll_oneoff               | 😶‍🌫️     |
 | proc_exit                 | 😶‍🌫️     |
 

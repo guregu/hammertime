@@ -1,9 +1,12 @@
 package hammertime
 
 import (
+	"hash/crc64"
 	"io"
 	"io/fs"
 	"path"
+	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/hack-pad/hackpadfs"
@@ -13,6 +16,7 @@ import (
 
 const (
 	stdioMaxFD = 3
+	rootFD     = 3
 	mkdirMode  = 0755
 )
 
@@ -63,6 +67,16 @@ func (fsys *filesystem) get(fd libc.Int) (*filedesc, libc.Errno) {
 	return f, libc.ErrnoSuccess
 }
 
+var crctab = crc64.MakeTable(crc64.ECMA)
+
+func (fsys *filesystem) ino(fd libc.Int, name string) uint64 {
+	// TODO: should use abs path
+	if name == "" {
+		name = "/proc/fd/" + strconv.Itoa(int(fd))
+	}
+	return crc64.Checksum([]byte(name), crctab)
+}
+
 func (fsys *filesystem) fdstat(fd libc.Int) (*libc.Fdstat, libc.Errno) {
 	f, errno := fsys.get(fd)
 	if errno != libc.ErrnoSuccess {
@@ -83,7 +97,7 @@ func (fsys *filesystem) stat(fd libc.Int) (*libc.Filestat, libc.Errno) {
 
 	fstat := &libc.Filestat{
 		Dev:   fsys.dev,
-		Ino:   1337, // TODO!!
+		Ino:   fsys.ino(fd, stat.Name()),
 		Mtim:  uint64(stat.ModTime().UnixNano()),
 		Nlink: 1,
 		Size:  uint64(stat.Size()),
@@ -105,13 +119,17 @@ func (fsys *filesystem) open(path string) (fd libc.Int, errno libc.Errno) {
 	if err != nil {
 		return 0, libc.Error(err)
 	}
+
 	fd = fsys.nextfd
 	fsys.nextfd++ // TODO: handle overflow
-	desc := newStream(f)
+
+	var desc *filedesc
+	desc, errno = newFile(f)
 	desc.no = fd
+
 	fsys.fds[fd] = desc
 	fsys.share(desc)
-	return
+	return fd, errno
 }
 
 func (fsys *filesystem) close(fd libc.Int) libc.Errno {
@@ -123,37 +141,70 @@ func (fsys *filesystem) close(fd libc.Int) libc.Errno {
 	return libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) readlink(name string) (string, libc.Errno) {
+func (fsys *filesystem) rel(fd int32, name string) (string, libc.Errno) {
+	name = cleanPath(name)
+	if fd == 0 || (fsys.fs != nil && fd == rootFD) {
+		return name, libc.ErrnoSuccess
+	}
+	f, errno := fsys.get(fd)
+	if errno != libc.ErrnoSuccess {
+		return "", errno
+	}
+	name, errno = f.rel(name)
+	if errno != libc.ErrnoSuccess {
+		return "", errno
+	}
+	return name, libc.ErrnoSuccess
+}
+
+func (fsys *filesystem) readlink(fd int32, name string) (string, libc.Errno) {
 	if fsys.fs == nil {
 		return "", libc.ErrnoNosys
 	}
-	name = path.Clean(name)
+	name, errno := fsys.rel(fd, name)
+	if errno != libc.ErrnoSuccess {
+		return "", errno
+	}
 	info, err := hackpadfs.Stat(fsys.fs, name)
 	if err != nil {
 		return "", libc.Error(err)
 	}
+	// TODO: is this accurate?
 	return info.Name(), libc.ErrnoSuccess
 }
 
-func (fsys *filesystem) rename(old, new string) libc.Errno {
+func (fsys *filesystem) rename(fd int32, old, new string) libc.Errno {
 	if fsys.fs == nil {
 		return libc.ErrnoNosys
 	}
+	old, errno := fsys.rel(fd, old)
+	if errno != libc.ErrnoSuccess {
+		return errno
+	}
+	// TODO: is new also relative?
 	err := hackpadfs.Rename(fsys.fs, old, new)
 	return libc.Error(err)
 }
 
-func (fsys *filesystem) remove(name string) libc.Errno {
+func (fsys *filesystem) remove(fd int32, name string) libc.Errno {
 	if fsys.fs == nil {
 		return libc.ErrnoNosys
+	}
+	name, errno := fsys.rel(fd, name)
+	if errno != libc.ErrnoSuccess {
+		return errno
 	}
 	err := hackpadfs.Remove(fsys.fs, name)
 	return libc.Error(err)
 }
 
-func (fsys *filesystem) rmdir(name string) libc.Errno {
+func (fsys *filesystem) rmdir(fd int32, name string) libc.Errno {
 	if fsys.fs == nil {
 		return libc.ErrnoNosys
+	}
+	name, errno := fsys.rel(fd, name)
+	if errno != libc.ErrnoSuccess {
+		return errno
 	}
 	stat, err := hackpadfs.Stat(fsys.fs, name)
 	if err != nil {
@@ -166,9 +217,13 @@ func (fsys *filesystem) rmdir(name string) libc.Errno {
 	return libc.Error(err)
 }
 
-func (fsys *filesystem) mkdir(name string, mode fs.FileMode) libc.Errno {
+func (fsys *filesystem) mkdir(fd int32, name string, mode fs.FileMode) libc.Errno {
 	if fsys.fs == nil {
 		return libc.ErrnoNosys
+	}
+	name, errno := fsys.rel(fd, name)
+	if errno != libc.ErrnoSuccess {
+		return errno
 	}
 	err := hackpadfs.Mkdir(fsys.fs, name, mode)
 	return libc.Error(err)
@@ -216,7 +271,7 @@ func (fsys *filesystem) readdir(fd libc.Int, cookie int64) (ent *libc.Dirent, na
 	}
 	dir := &libc.Dirent{
 		Next:   uint64(i + 1),
-		Ino:    uint64(1337 + i), // TODO
+		Ino:    fsys.ino(fd, name),
 		Namlen: libc.Size(len(name)),
 		Dtype:  dtype,
 	}
@@ -229,8 +284,27 @@ type filedesc struct {
 	fdstat  *libc.Fdstat
 	preopen string
 	dirent  []fs.DirEntry
+	mode    fs.FileMode
 
 	rc int
+}
+
+func (fd *filedesc) Write(b []byte) (int, error) {
+	if w, ok := fd.File.(io.Writer); ok {
+		return w.Write(b)
+	}
+	return 0, syscall.ENOSYS
+}
+
+func (fd *filedesc) rel(name string) (string, libc.Errno) {
+	if fd.preopen != "" {
+		return fd.preopen + name, libc.ErrnoSuccess
+	}
+	stat, err := fd.File.Stat()
+	if err != nil {
+		return "", libc.Error(err)
+	}
+	return path.Join(stat.Name(), name), libc.ErrnoSuccess
 }
 
 func (fsys *filesystem) share(fd *filedesc) {
@@ -256,15 +330,38 @@ type file interface {
 	io.WriteSeeker
 }
 
-func newFile(f fs.File) *filedesc {
-	stat := libc.Fdstat{
-		Filetype: libc.FiletypeRegularFile, // TODO
+func newFile(f fs.File) (*filedesc, libc.Errno) {
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, libc.Error(err)
 	}
+
+	var fdstat libc.Fdstat
+	mode := stat.Mode()
+	switch {
+	case mode.IsRegular():
+		fdstat.Filetype = libc.FiletypeRegularFile
+	case mode.IsDir():
+		fdstat.Filetype = libc.FiletypeDirectory
+	case mode&fs.ModeCharDevice != 0:
+		fdstat.Filetype = libc.FiletypeCharacterDevice
+	case mode&fs.ModeDevice != 0:
+		fdstat.Filetype = libc.FiletypeBlockDevice
+	case mode&fs.ModeSymlink != 0:
+		fdstat.Filetype = libc.FiletypeSymbolicLink
+	case mode&fs.ModeSocket != 0:
+		fdstat.Filetype = libc.FiletypeSocketStream
+	default:
+		fdstat.Filetype = libc.FiletypeUnknown
+	}
+	fdstat.RightsInheriting = uint64(mode.Perm()) // TODO: verify
+	fdstat.RightsBase = uint64(mode.Perm())       // TODO: verify
 
 	return &filedesc{
 		File:   f,
-		fdstat: &stat,
-	}
+		fdstat: &fdstat,
+		mode:   mode,
+	}, libc.ErrnoSuccess
 }
 
 func newStream(v any) *filedesc {
@@ -292,6 +389,7 @@ func newStream(v any) *filedesc {
 	return &filedesc{
 		File:   file,
 		fdstat: &stat,
+		mode:   fs.ModePerm, // 0777, TODO: fix?
 	}
 }
 
@@ -375,4 +473,12 @@ func (fi fileinfo) IsDir() bool {
 
 func (fi fileinfo) Sys() any {
 	return fi.sys
+}
+
+func cleanPath(name string) string {
+	name = path.Clean(name)
+	if len(name) > 0 && name[0] == '/' {
+		return name[1:]
+	}
+	return name
 }

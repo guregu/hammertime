@@ -27,7 +27,7 @@ func TestWASI(t *testing.T) {
 		{"read.wasm", "hello world!"},
 		{"dir.wasm", "a.txt\nb.txt\n"},
 		{"echo.wasm", stdinText},
-		{"mkdir.wasm", "0 0\n0 0\n"},
+		{"mkdir.wasm", "0 0\n0 0\n0 0\n0 0\n"},
 	}
 
 	for _, testcase := range cases {

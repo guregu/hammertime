@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"syscall"
 	"unsafe"
 
 	"github.com/bytecodealliance/wasmtime-go/v11"
@@ -158,12 +157,10 @@ func (wasi *WASI) fd_seek(caller *wasmtime.Caller, fd libc.Int, offset int64, wh
 	if errno != libc.ErrnoSuccess {
 		return errno, nil
 	}
-	ret, err := hackpadfs.SeekFile(f, offset, int(whence))
-	switch {
-	// TODO: more
-	case err != nil:
-		wasi.debugln("seek error", err)
-		return libc.ErrnoInval, nil
+	ret, err := hackpadfs.SeekFile(f.File, offset, int(whence))
+	if err != nil {
+		// TODO: handle EPIPE?
+		return libc.Error(err), nil
 	}
 
 	err = ensure(caller, func(base unsafe.Pointer, _ []byte) {
@@ -193,15 +190,7 @@ func (wasi *WASI) fd_write(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr
 		vecs := unsafe.Slice(vec0, iovslen)
 		for _, vec := range vecs {
 			buf := data[vec.Buf : vec.Buf+vec.Len]
-			// TODO: fix this
-			var wrote int
-			var err error
-			if w, ok := f.File.(io.Writer); ok {
-				wrote, err = w.Write(buf)
-			} else {
-				err = syscall.ENOSYS // RO?
-			}
-			// wrote, err := hackpadfs.WriteFile(f, buf)
+			wrote, err := f.Write(buf)
 			total += libc.Size(wrote)
 			wasi.debugf("write(%d, %q)", fd, string(buf))
 			if err == io.EOF {
@@ -348,19 +337,19 @@ func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset
 
 	// TODO: use ReadAt
 
-	pos, err := hackpadfs.SeekFile(f, 0, io.SeekCurrent)
+	pos, err := hackpadfs.SeekFile(f.File, 0, io.SeekCurrent)
 	if err != nil {
 		errno = libc.Error(err)
 		return
 	}
 	defer func() {
-		_, err := hackpadfs.SeekFile(f, pos, io.SeekStart)
+		_, err := hackpadfs.SeekFile(f.File, pos, io.SeekStart)
 		if errno == 0 {
 			errno = libc.Error(err)
 		}
 	}()
 	if pos != 0 && offset != 0 {
-		_, err = hackpadfs.SeekFile(f, int64(offset), io.SeekStart)
+		_, err = hackpadfs.SeekFile(f.File, int64(offset), io.SeekStart)
 	}
 	if err != nil {
 		errno = libc.Error(err)
@@ -456,7 +445,7 @@ func (wasi *WASI) path_create_directory(caller *wasmtime.Caller, fd, _path, _pat
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
-		errno = wasi.mkdir(name, mkdirMode) // TODO: mkdirat
+		errno = wasi.mkdir(fd, name, mkdirMode) // TODO: mkdirat
 		wasi.debugf("mkdir(%d, %q)", fd, name)
 	}, path+pathlen)
 	if err != nil {
@@ -473,7 +462,7 @@ func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, fd, _path, _pat
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
-		errno = wasi.remove(name)
+		errno = wasi.remove(fd, name)
 		wasi.debugf("rmdir(%d, %q)", fd, name) // TODO: fd
 	}, path+pathlen)
 	if err != nil {
@@ -483,15 +472,15 @@ func (wasi *WASI) path_remove_directory(caller *wasmtime.Caller, fd, _path, _pat
 	return errno, nil
 }
 
-func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, fd int, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
+func (wasi *WASI) path_unlink_file(caller *wasmtime.Caller, fd int32, _path, _pathlen int32) (libc.Int, *wasmtime.Trap) {
 	path := libc.Ptr(_path)
 	pathlen := libc.Size(_pathlen)
 
 	var errno libc.Errno
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
-		errno = wasi.remove(name)
-		wasi.debugf("unlink(%q)", name)
+		errno = wasi.remove(fd, name)
+		wasi.debugf("unlink(%d, %q)", fd, name)
 	}, path+pathlen)
 	if err != nil {
 		return 0, wasmtime.NewTrap(err.Error())
@@ -555,7 +544,7 @@ func (wasi *WASI) path_readlink(caller *wasmtime.Caller, fd, _path, _pathlen, _b
 	err := ensure(caller, func(base unsafe.Pointer, data []byte) {
 		name := string(data[path : path+pathlen])
 		var link string
-		link, errno = wasi.readlink(name)
+		link, errno = wasi.readlink(fd, name)
 		if errno != 0 {
 			return
 		}
@@ -583,7 +572,7 @@ func (wasi *WASI) path_rename(caller *wasmtime.Caller, fd, _oldpath, _oldpathlen
 		// TODO: impl
 		oldname := string(data[oldpath : oldpath+oldpathlen])
 		newname := string(data[newpath : newpath+newpathlen])
-		errno = wasi.rename(oldname, newname) // TODO: use fd
+		errno = wasi.rename(fd, oldname, newname)
 		if errno != 0 {
 			return
 		}
