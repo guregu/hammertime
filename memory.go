@@ -19,6 +19,8 @@ func (sf segfault) Error() string {
 	return fmt.Sprintf("segfault: %x > %x", sf.addr, sf.max)
 }
 
+// ensure performs bounds checking on the addresses given to it,
+// then calls a function that can access raw memory.
 func ensure(caller *wasmtime.Caller, fn func(base unsafe.Pointer, data []byte), addrs ...libc.Ptr) error {
 	// const max32 = 1 << 32
 
@@ -28,10 +30,11 @@ func ensure(caller *wasmtime.Caller, fn func(base unsafe.Pointer, data []byte), 
 	base := mem.Data(caller)
 	datasize := mem.DataSize(caller)
 	maxphysaddr := libc.Size(datasize)
+	data := unsafe.Slice((*byte)(base), datasize)
+
 	// if datasize >= max32 {
 	// 	return fmt.Errorf("memory is too big for wasm32: %d", datasize)
 	// }
-	data := unsafe.Slice((*byte)(base), datasize)
 	// data := (*[max32]byte)(base)[:datasize:datasize]
 
 	maxaddr := slices.Max(addrs)

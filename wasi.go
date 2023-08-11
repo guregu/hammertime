@@ -322,10 +322,10 @@ func (wasi *WASI) fd_read(caller *wasmtime.Caller, fd, _iovs, _iovslen, _retptr 
 	return errno, nil
 }
 
-func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen, _offset, _retptr libc.Int) (errno int32, trap *wasmtime.Trap) {
+func (wasi *WASI) fd_pread(caller *wasmtime.Caller, fd, _iovs, _iovslen libc.Int, _offset int64, _retptr libc.Int) (errno int32, trap *wasmtime.Trap) {
 	iovs := libc.Ptr(_iovs)
 	iovslen := libc.Size(_iovslen)
-	offset := libc.Size(_offset)
+	offset := uint64(_offset)
 	retptr := libc.Ptr(_retptr)
 	wasi.debugln("fd_read", fd, iovs, iovslen, retptr)
 
